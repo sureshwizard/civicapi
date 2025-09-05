@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CivicAPI – Bills Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Prevent stale caching of this page -->
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <!-- Bootstrap -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" />
+  <style>
+    body { background:#f8f9fa; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .container { max-width: 960px; margin-top: 30px; }
+    .bill-card { margin-bottom: 1rem; }
+    pre { white-space: pre-wrap; word-break: break-word; }
+    .keybar { background:#fff; border-bottom:1px solid #e5e7eb; }
+  </style>
+</head>
+<body>
+  <!-- API Key Bar -->
+  <div class="keybar py-2">
+    <div class="container d-flex align-items-center gap-2">
+      <strong>X-API-KEY:</strong>
+      <input id="apiKeyInput" class="form-control form-control-sm" style="max-width:420px" placeholder="Enter your CIVICAPI_API_KEY" />
+      <button id="saveKeyBtn" class="btn btn-sm btn-primary">Save</button>
+      <span id="keyStatus" class="ms-2 text-muted"></span>
+    </div>
+  </div>
+
+  <div class="container">
+    <h1 class="text-center mb-4">💡 CivicAPI – Bills Management</h1>
+
+    <!-- Upload Section -->
+    <div class="card mb-4">
+      <div class="card-header">📤 Upload a Bill</div>
+      <div class="card-body">
+        <form id="uploadForm">
+          <div class="mb-3">
+            <label for="billFile" class="form-label">Upload Bill (PDF/TXT)</label>
+            <input type="file" id="billFile" name="file" accept=".txt,.pdf" class="form-control" />
+            <div class="form-text">
+              TXT example:
+              <code>Vendor: Acme</code>,
+              <code>Amount: $1420.50</code>,
+              <code>Due: 2025-09-02</code>
+              (PDFs upload but aren’t auto-parsed in this demo.)
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Or enter details manually</label>
+            <input type="text" class="form-control mb-2" name="vendor" placeholder="Vendor" />
+            <input type="number" step="0.01" class="form-control mb-2" name="amount" placeholder="Amount" />
+            <input type="text" class="form-control mb-2" name="due_date" placeholder="YYYY-MM-DD or DD-MM-YYYY" />
+            <input type="text" class="form-control mb-2" name="note" placeholder="Note (optional)" />
+          </div>
+          <button class="btn btn-primary">Upload</button>
+        </form>
+        <div id="uploadError" class="alert alert-danger mt-3 d-none"></div>
+        <div id="uploadOk" class="alert alert-success mt-3 d-none"></div>
+      </div>
+    </div>
+
+    <!-- Bills List -->
+    <div class="card mb-4">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span>📑 Bills</span>
+        <div class="d-flex gap-2">
+          <button id="refreshBtn" class="btn btn-sm btn-outline-secondary">Refresh</button>
+          <button id="healthBtn" class="btn btn-sm btn-outline-info">Test /health</button>
+        </div>
+      </div>
+      <div class="card-body" id="billsList">
+        <p class="text-muted">No bills yet. Upload one above!</p>
+      </div>
+    </div>
+
+    <!-- Last error (network/server) -->
+    <div id="lastErr" class="alert alert-warning d-none">
+      <strong>Last error:</strong>
+      <pre id="lastErrText" class="mb-0"></pre>
+    </div>
+  </div>
+
+  <script>
+    // Always call the API at the root (NOT /ui/upload etc.)
+    // Using absolute root paths avoids base-URL surprises.
+    const API_BASE = ""; // keep empty and always prefix paths with a leading slash
+    const HDR_KEY  = "CIVICAPI_API_KEY";
+
+    const keyInput = document.getElementById('apiKeyInput');
+    const saveKeyBtn = document.getElementById('saveKeyBtn');
+    const keyStatus = document.getElementById('keyStatus');
+    const lastErr   = document.getElementById('lastErr');
+    const lastErrText = document.getElementById('lastErrText');
+
+    function setLastErr(msg){
+      lastErrText.textContent = msg;
+      lastErr.classList.remove('d-none');
+      console.error(msg);
+    }
+    function clearLastErr(){
+      lastErr.classList.add('d-none');
+      lastErrText.textContent = "";
+    }
+
+    function loadKey(){
+      const k = localStorage.getItem(HDR_KEY) || "";
+      keyInput.value = k;
+      keyStatus.textContent = k ? "saved" : "not set";
+      keyStatus.className = k ? "ms-2 text-success" : "ms-2 text-danger";
+      return k;
+    }
+    function saveKey(){
+      const v = keyInput.value.trim();
+      if (v) {
+        localStorage.setItem(HDR_KEY, v);
+        keyStatus.textContent = "saved";
+        keyStatus.className = "ms-2 text-success";
+      } else {
+        localStorage.removeItem(HDR_KEY);
+        keyStatus.textContent = "not set";
+        keyStatus.className = "ms-2 text-danger";
+      }
+    }
+    saveKeyBtn.addEventListener('click', ()=>{ saveKey(); clearLastErr(); });
+
+    function headersWithKey(extra = {}){
+      const key = localStorage.getItem(HDR_KEY);
+      if (!key) throw new Error("X-API-KEY is not set. Enter it at the top and click Save.");
+      return { "X-API-KEY": key, ...extra };
+    }
+
+    function showError(el, msg){ el.textContent = msg; el.classList.remove("d-none"); }
+    function hide(el){ el.classList.add("d-none"); }
+
+    function toISO(dateStr){
+      if(!dateStr) return "";
+      const s = String(dateStr).trim().replace(/\//g, "-");
+      const p = s.split("-");
+      if (p.length === 3) {
+        if (p[0].length === 4) return s; // YYYY-MM-DD
+        if (p[2].length === 4) {         // DD-MM-YYYY -> YYYY-MM-DD
+          const [dd, mm, yyyy] = p;
+          return `${yyyy}-${mm.padStart(2,'0')}-${dd.padStart(2,'0')}`;
+        }
+      }
+      return s;
+    }
+
+    async function apiFetch(path, opts={}){
+      const init = { ...opts };
+      // use absolute path (leading slash)
+      const url = path.startsWith("/") ? path : `/${path}`;
+      init.headers = { ...(opts.headers || {}), ...headersWithKey() };
+      // Accept JSON for better error bodies from FastAPI
+      init.headers["Accept"] = "application/json, text/plain;q=0.9,*/*;q=0.5";
+
+      const res = await fetch(`${API_BASE}${url}`, init);
+      const text = await res.text(); // always read body
+      if (!res.ok) {
+        setLastErr(`${init.method || 'GET'} ${url} ${res.status}\n${text}`);
+        throw new Error(`${init.method || 'GET'} ${url} ${res.status}: ${text}`);
+      }
+      clearLastErr();
+      try { return JSON.parse(text); } catch { return text; }
+    }
+
+    async function fetchBills(){
+      const list = document.getElementById("billsList");
+      try {
+        const data = await apiFetch("/bills");
+        renderBills(data.items || []);
+      } catch (e) {
+        list.innerHTML = `<div class="alert alert-danger"><strong>Error:</strong> ${e.message}</div>`;
+      }
+    }
+
+    function renderBills(items){
+      const list = document.getElementById("billsList");
+      if (!items.length){
+        list.innerHTML = `<p class="text-muted">No bills yet. Upload one above!</p>`;
+        return;
+      }
+      list.innerHTML = "";
+      items.forEach(b=>{
+        const vendor = b.vendor ?? "Unknown Vendor";
+        const amountNum = Number(b.amount);
+        const amount = isNaN(amountNum) ? b.amount : amountNum.toFixed(2);
+        const due = b.due_date;
+        const status = (b.status || "unpaid").toLowerCase();
+        const badge = status === "paid" ? "bg-success" : (status === "canceled" ? "bg-secondary" : "bg-warning");
+        const div = document.createElement("div");
+        div.className = "card bill-card";
+        div.innerHTML = `
+          <div class="card-body">
+            <h5 class="card-title">${vendor} — $${amount}</h5>
+            <p class="card-text">
+              <b>Due:</b> ${due}<br/>
+              <b>Status:</b> <span class="badge ${badge} text-uppercase">${status}</span>
+            </p>
+            <button class="btn btn-success btn-sm me-2" onclick="markPaid('${b.id}')">Mark Paid</button>
+            <button class="btn btn-info btn-sm" onclick="notifyBill('${b.id}')">Notify</button>
+          </div>`;
+        list.appendChild(div);
+      });
+    }
+
+    document.getElementById("uploadForm").addEventListener("submit", async (e)=>{
+      e.preventDefault();
+      const form = e.target;
+      const ok = document.getElementById("uploadOk");
+      const err = document.getElementById("uploadError");
+      hide(ok); hide(err);
+
+      try {
+        const fd = new FormData(form);
+
+        // Early validation
+        const hasFile   = (fd.get("file") && fd.get("file").name);
+        const hasManual = fd.get("vendor") || fd.get("amount") || fd.get("due_date");
+        if (!hasFile && !hasManual){
+          showError(err, "Please choose a TXT/PDF or fill vendor, amount, and due date.");
+          return;
+        }
+
+        // Normalize amount + date only when manual mode is used
+        if (!hasFile) {
+          if (!fd.get("vendor") || !fd.get("amount") || !fd.get("due_date")) {
+            showError(err, "Please fill vendor, amount, and due date.");
+            return;
+          }
+          fd.set("amount", String(fd.get("amount")).trim());
+          fd.set("due_date", toISO(String(fd.get("due_date")).trim()));
+        }
+
+        const res = await fetch(`/upload`, {
+          method: "POST",
+          headers: headersWithKey(), // leave Content-Type to the browser for FormData
+          body: fd
+        });
+        const text = await res.text();
+        if (!res.ok) {
+          setLastErr(`POST /upload ${res.status}\n${text}`);
+          throw new Error(`POST /upload ${res.status}: ${text}`);
+        }
+
+        ok.textContent = "Bill uploaded successfully!";
+        ok.classList.remove("d-none");
+        form.reset();
+        await fetchBills();
+      } catch(e2){
+        showError(err, e2.message);
+      }
+    });
+
+    async function markPaid(id){
+      const list = document.getElementById("billsList");
+      try{
+        await apiFetch(`/bills/${id}/mark_paid`, { method: "POST" });
+        await fetchBills();
+      }catch(e){
+        list.insertAdjacentHTML("afterbegin",
+          `<div class="alert alert-danger"><strong>Error:</strong> ${e.message}</div>`);
+      }
+    }
+
+    async function notifyBill(id){
+      try{
+        await apiFetch(`/notify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bill_id: id, channel: "console" })
+        });
+        alert("Notification sent (console). Check server log for SMS if configured.");
+      }catch(e){
+        alert("Error sending notification:\n" + e.message);
+      }
+    }
+    window.markPaid = markPaid;
+    window.notifyBill = notifyBill;
+
+    // Toolbar helpers
+    document.getElementById('refreshBtn').addEventListener('click', fetchBills);
+    document.getElementById('healthBtn').addEventListener('click', async ()=>{
+      try {
+        const r = await fetch(`/health`);
+        const t = await r.text();
+        alert(`/health ${r.status}\n${t}`);
+      } catch (e) {
+        alert(`Failed to call /health: ${e.message}`);
+      }
+    });
+
+    // INIT
+    loadKey();
+    // First bills load (will throw if key missing; caught below)
+    fetchBills().catch(e=>{
+      document.getElementById("billsList").innerHTML =
+        `<div class="alert alert-warning">${e.message}</div>`;
+    });
+  </script>
+</body>
+</html>
+

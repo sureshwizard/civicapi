@@ -1,0 +1,11 @@
+● civicapi.service - CivicAPI (FastAPI/Uvicorn) on port 4051
+   Loaded: loaded (/etc/systemd/system/civicapi.service; enabled; vendor preset: disabled)
+   Active: activating (auto-restart) (Result: exit-code) since Thu 2025-09-04 21:20:56 UTC; 3s ago
+  Process: 2495343 ExecStart=/home/sureshwizard/projects/liveprojects/civicapi/backend/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 4051 --workers 1 [0;1;31m(code=exited, status=3)[0m
+ Main PID: 2495343 (code=exited, status=3)
+    Tasks: 0 (limit: 37775)
+   Memory: 0B
+   CGroup: /system.slice/civicapi.service
+
+Sep 04 21:20:56 server1.sureshwizard.com systemd[1]: [0;1;39m[0;1;31m[0;1;39mcivicapi.service: Main process exited, code=exited, status=3/NOTIMPLEMENTED[0m
+Sep 04 21:20:56 server1.sureshwizard.com systemd[1]: [0;1;39m[0;1;31m[0;1;39mcivicapi.service: Failed with result 'exit-code'.[0m

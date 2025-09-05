@@ -1,0 +1,10 @@
+[0;1;32m●[0m civicapi.service - CivicAPI (FastAPI/Uvicorn) on port 4051
+   Loaded: loaded (/etc/systemd/system/civicapi.service; enabled; vendor preset: disabled)
+   Active: [0;1;32mactive (running)[0m since Thu 2025-09-04 21:26:52 UTC; 107ms ago
+ Main PID: 2540337 (uvicorn)
+    Tasks: 1 (limit: 37775)
+   Memory: 8.4M
+   CGroup: /system.slice/civicapi.service
+           └─2540337 /home/sureshwizard/projects/liveprojects/civicapi/backend/.venv/bin/python /home/sureshwizard/projects/liveprojects/civicapi/backend/.venv/bin/uvicorn backend.main:app --host 0.0.0.0 --port 4051 --workers 1
+
+Sep 04 21:26:52 server1.sureshwizard.com systemd[1]: Started CivicAPI (FastAPI/Uvicorn) on port 4051.

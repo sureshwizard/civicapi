@@ -1,0 +1,13 @@
+# Python
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# Node (if any)
+node_modules/
+
+# OS / editor
+.DS_Store
+*.swp

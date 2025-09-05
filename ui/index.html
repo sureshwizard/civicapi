@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>CivicAPI – Bills Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; }
+    input, button, select { padding:8px; font-size:14px; }
+    .card { border:1px solid #ddd; border-radius:10px; padding:16px; margin:10px 0; }
+    .ok { color: #126c27; }
+    .err { color: #b00020; }
+    table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; }
+    th { background: #f5f5f5; text-align: left; }
+    .right { text-align: right; }
+    .muted { color: #666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <h1>CivicAPI — Bills</h1>
+
+  <div class="card">
+    <h3>Connection</h3>
+    <div class="row">
+      <label>Base URL
+        <input id="baseUrl" size="40" value="" placeholder="e.g. https://civic.admnwizard.com/api">
+      </label>
+      <label>API Key (x-api-key)
+        <input id="apiKey" size="36" placeholder="enter your API key">
+      </label>
+      <button id="saveConn">Save</button>
+      <span class="muted">Saved to localStorage</span>
+    </div>
+    <div id="connMsg" class="muted"></div>
+  </div>
+
+  <div class="card">
+    <h3>Health Check</h3>
+    <button id="btnHealth">Ping /</button>
+    <pre id="healthOut" class="muted"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Upload Bill</h3>
+    <div class="row">
+      <label>Bill file (txt/pdf)
+        <input type="file" id="billFile" accept=".txt,.pdf">
+      </label>
+      <button id="btnUploadFile">Upload File</button>
+    </div>
+    <div class="muted">— or manual —</div>
+    <div class="row">
+      <label>Vendor <input id="vendor"></label>
+      <label>Amount <input id="amount" type="number" step="0.01"></label>
+      <label>Due Date <input id="due" type="date"></label>
+      <input id="note" placeholder="Optional note">
+      <button id="btnUploadForm">Upload Fields</button>
+    </div>
+    <div id="upMsg"></div>
+  </div>
+
+  <div class="card">
+    <h3>All Bills</h3>
+    <div class="row">
+      <button id="btnLoadBills">Load Bills</button>
+      <select id="statusFilter">
+        <option value="">(all)</option>
+        <option value="unpaid">unpaid</option>
+        <option value="paid">paid</option>
+        <option value="canceled">canceled</option>
+      </select>
+    </div>
+    <table id="billsTbl">
+      <thead>
+        <tr>
+          <th>ID</th><th>Vendor</th><th class="right">Amount</th><th>Due</th><th>Status</th><th>Actions</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <div id="listMsg"></div>
+  </div>
+
+  <!-- External JS (no inline) -->
+  <script src="/js/app.js" defer></script>
+</body>
+</html>
+
